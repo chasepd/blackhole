@@ -88,7 +88,6 @@ def rate_based_delay(ip):
 
 ### For every 20 seconds it's been since the last request from IP, decrease the delay by 1 second
 def rate_based_delay_decay(ip):
-
     ip_counter[ip] = max(ip_counter.get(ip, 0) - int((time.time() - last_request_time_by_ip[ip]) / 20), 0)
     
 
