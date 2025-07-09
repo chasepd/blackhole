@@ -4,6 +4,7 @@ use std::io::Read;
 use std::thread;
 use std::time::Duration;
 use blackhole::{read_responses, Args};
+use tokio::time::sleep as async_sleep;
 
 #[tokio::test]
 async fn test_server_response() {
@@ -40,7 +41,7 @@ async fn test_server_response() {
         true,   // test_mode: disables ctrl_c and only runs one rotation
     ));
     println!("Server spawned, waiting for it to start...");
-    thread::sleep(Duration::from_millis(500)); // Give the server time to start
+    async_sleep(Duration::from_millis(500)).await; // Give the server time to start
     println!("Now trying to connect...");
 
     // Try to connect for up to 2 seconds
@@ -63,7 +64,7 @@ async fn test_server_response() {
             Err(e) => {
                 println!("Connection attempt {} failed: {:?}", attempt + 1, e);
                 last_err = Some(e);
-                thread::sleep(Duration::from_millis(100));
+                async_sleep(Duration::from_millis(100)).await;
             }
         }
     }
