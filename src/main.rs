@@ -5,121 +5,11 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 use anyhow::Result;
 use tokio::time::sleep as async_sleep;
-use blackhole::{read_responses, select_ports, Args};
+use blackhole::{read_responses, select_ports, Args, run_server};
 use clap::Parser;
 use tokio::sync::broadcast;
 
 type SharedMap<T> = Arc<DashMap<String, T>>;
-
-async fn handle_client(
-    mut stream: TcpStream,
-    peer_ip: String,
-    ip_counter: SharedMap<u32>,
-    last_request_time_by_ip: SharedMap<Instant>,
-    responses: Arc<Vec<Arc<str>>>,
-) -> Result<()> {
-    // Rate-based delay logic
-    let now = Instant::now();
-    let last_time = last_request_time_by_ip.get(&peer_ip).map(|t| *t);
-    if let Some(last) = last_time {
-        let elapsed = now.duration_since(last).as_secs();
-        let decay = (elapsed / 20) as u32;
-        if decay > 0 {
-            let mut entry = ip_counter.entry(peer_ip.clone()).or_insert(0);
-            *entry = entry.saturating_sub(decay);
-        }
-    }
-    last_request_time_by_ip.insert(peer_ip.clone(), now);
-    let mut entry = ip_counter.entry(peer_ip.clone()).or_insert(0);
-    let delay = *entry;
-    *entry = (*entry + 1).min(10);
-    if delay > 0 {
-        async_sleep(Duration::from_secs(delay as u64)).await;
-    }
-    // Send a random response
-    let resp = {
-        let responses = &*responses;
-        let idx = rand::thread_rng().gen_range(0..responses.len());
-        responses[idx].clone()
-    };
-    tokio::io::AsyncWriteExt::write_all(&mut stream, resp.as_bytes()).await?;
-    Ok(())
-}
-
-async fn run_server(
-    args: Args,
-    ip_counter: SharedMap<u32>,
-    last_request_time_by_ip: SharedMap<Instant>,
-    responses: Arc<Vec<Arc<str>>>,
-) -> Result<()> {
-    loop {
-        let ports = select_ports(&args);
-        println!("Listening on ports: {:?}", ports);
-        let mut listeners = Vec::new();
-        for port in &ports {
-            match TcpListener::bind(("0.0.0.0", *port)).await {
-                Ok(listener) => listeners.push(listener),
-                Err(e) => println!("Failed to bind port {}: {}", port, e),
-            }
-        }
-        let ip_counter = ip_counter.clone();
-        let last_request_time_by_ip = last_request_time_by_ip.clone();
-        let responses = responses.clone();
-        let (shutdown_tx, _) = broadcast::channel::<()>(1);
-        let mut tasks = Vec::new();
-        for listener in listeners {
-            let ip_counter = ip_counter.clone();
-            let last_request_time_by_ip = last_request_time_by_ip.clone();
-            let responses = responses.clone();
-            let mut shutdown_rx = shutdown_tx.subscribe();
-            let task = tokio::spawn(async move {
-                loop {
-                    tokio::select! {
-                        biased;
-                        _ = shutdown_rx.recv() => {
-                            break;
-                        }
-                        res = listener.accept() => {
-                            match res {
-                                Ok((stream, addr)) => {
-                                    let peer_ip = addr.ip().to_string();
-                                    let ip_counter = ip_counter.clone();
-                                    let last_request_time_by_ip = last_request_time_by_ip.clone();
-                                    let responses = responses.clone();
-                                    tokio::spawn(async move {
-                                        let _ = handle_client(stream, peer_ip, ip_counter, last_request_time_by_ip, responses).await;
-                                    });
-                                }
-                                Err(_) => break, // Listener closed
-                            }
-                        }
-                    }
-                }
-            });
-            tasks.push(task);
-        }
-        // Wait for either 5 seconds or Ctrl+C
-        tokio::select! {
-            _ = async_sleep(Duration::from_secs(5)) => {
-                let _ = shutdown_tx.send(());
-            }
-            _ = tokio::signal::ctrl_c() => {
-                println!("Ctrl+C received, shutting down.");
-                let _ = shutdown_tx.send(());
-                // Wait for all listener tasks to finish
-                for task in tasks {
-                    let _ = task.await;
-                }
-                break;
-            }
-        }
-        // Wait for all listener tasks to finish before rotating ports
-        for task in tasks {
-            let _ = task.await;
-        }
-    }
-    Ok(())
-}
 
 #[tokio::main]
 async fn main() -> Result<()> {
@@ -129,6 +19,6 @@ async fn main() -> Result<()> {
     let ip_counter: SharedMap<u32> = Arc::new(DashMap::new());
     let last_request_time_by_ip: SharedMap<Instant> = Arc::new(DashMap::new());
     println!("Loaded {} fake responses.", responses.len());
-    run_server(args, ip_counter, last_request_time_by_ip, responses).await?;
+    run_server(args, ip_counter, last_request_time_by_ip, responses, 5, false).await?;
     Ok(())
 }
