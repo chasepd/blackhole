@@ -37,8 +37,8 @@ async fn test_server_response() {
         1,      // rotation_secs: 1 second for fast test
         true,   // test_mode: disables ctrl_c and only runs one rotation
     ));
-    println!("Server spawned, waiting a moment...");
-    thread::sleep(Duration::from_millis(500)); // Give the server more time to start
+    println!("Server spawned, waiting for it to start...");
+    thread::sleep(Duration::from_millis(500)); // Give the server time to start
     println!("Now trying to connect...");
 
     // Try to connect for up to 2 seconds
