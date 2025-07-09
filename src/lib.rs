@@ -11,6 +11,7 @@ use std::time::{Duration, Instant};
 use tokio::net::{TcpListener, TcpStream};
 use tokio::time::sleep as async_sleep;
 use tokio::sync::broadcast;
+use tokio::sync::oneshot;
 
 #[derive(Parser, Debug)]
 #[command(author, version, about, long_about = None)]
@@ -19,7 +20,7 @@ pub struct Args {
     pub min_port: Option<u16>,
     #[arg(short = 'M', long)]
     pub max_port: Option<u16>,
-    #[arg(short = 'l', long)]
+    #[arg(short = 'l', long, value_delimiter = ',')]
     pub port_list: Vec<u16>,
 }
 
@@ -108,6 +109,7 @@ pub async fn run_server(
     responses: Arc<Vec<Arc<str>>>,
     rotation_secs: u64,
     test_mode: bool,
+    shutdown_rx: Option<oneshot::Receiver<()>>,
 ) -> Result<()> {
     println!("run_server function called!");
     loop {
@@ -168,8 +170,20 @@ pub async fn run_server(
             tasks.push(task);
         }
         if test_mode {
-            async_sleep(Duration::from_secs(rotation_secs)).await;
-            let _ = shutdown_tx.send(());
+            if let Some(rx) = shutdown_rx {
+                tokio::select! {
+                    _ = async_sleep(Duration::from_secs(rotation_secs)) => {
+                        let _ = shutdown_tx.send(());
+                    }
+                    _ = rx => {
+                        println!("Test signaled shutdown");
+                        let _ = shutdown_tx.send(());
+                    }
+                }
+            } else {
+                async_sleep(Duration::from_secs(rotation_secs)).await;
+                let _ = shutdown_tx.send(());
+            }
         } else {
             tokio::select! {
                 _ = async_sleep(Duration::from_secs(rotation_secs)) => {
