@@ -140,6 +140,7 @@ pub async fn run_server(
             let responses = responses.clone();
             let mut shutdown_rx = shutdown_tx.subscribe();
             let task = tokio::spawn(async move {
+                println!("Starting accept loop for listener");
                 loop {
                     tokio::select! {
                         biased;

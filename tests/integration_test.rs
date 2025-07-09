@@ -38,14 +38,16 @@ async fn test_server_response() {
         true,   // test_mode: disables ctrl_c and only runs one rotation
     ));
     println!("Server spawned, waiting a moment...");
-    thread::sleep(Duration::from_millis(100)); // Give the server a moment to start
+    thread::sleep(Duration::from_millis(500)); // Give the server more time to start
     println!("Now trying to connect...");
 
     // Try to connect for up to 2 seconds
     let mut last_err = None;
-    for _ in 0..20 {
+    for attempt in 0..20 {
+        println!("Connection attempt {}", attempt + 1);
         match StdTcpStream::connect(format!("127.0.0.1:{}", port)) {
             Ok(mut stream) => {
+                println!("Connected successfully!");
                 let mut buf = String::new();
                 stream.read_to_string(&mut buf).unwrap();
                 assert_eq!(buf, "test response");
@@ -57,6 +59,7 @@ async fn test_server_response() {
                 return;
             }
             Err(e) => {
+                println!("Connection attempt {} failed: {:?}", attempt + 1, e);
                 last_err = Some(e);
                 thread::sleep(Duration::from_millis(100));
             }
