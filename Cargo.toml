@@ -1,0 +1,11 @@
+[package]
+name = "blackhole"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+tokio = { version = "1", features = ["full"] }
+clap = { version = "4", features = ["derive"] }
+dashmap = "5"
+rand = "0.8"
+anyhow = "1"
