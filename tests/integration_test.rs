@@ -15,6 +15,7 @@ async fn test_server_response() {
     let listener = StdTcpListener::bind("127.0.0.1:0").unwrap();
     let port = listener.local_addr().unwrap().port();
     drop(listener); // Release the port for the async server
+    println!("Test found free port: {}", port);
 
     // Prepare Args
     let args = Args {
@@ -22,6 +23,7 @@ async fn test_server_response() {
         max_port: None,
         port_list: vec![port],
     };
+    println!("Test will use port list: {:?}", args.port_list);
     let responses = read_responses("test_responses").unwrap();
     let responses = std::sync::Arc::new(responses);
     let ip_counter = std::sync::Arc::new(dashmap::DashMap::new());
